@@ -1,3 +1,7 @@
+# Paraview files
+*.csv
+*.vtk
+
 # Prerequisites
 *.d
 
