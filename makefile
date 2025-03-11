@@ -11,7 +11,7 @@ MAIN        := main.cpp
 
 # Source files in src/ (we exclude SmallList.cpp because its implementation
 # is handled via explicit instantiation in instantiations.cpp)
-SRC_FILES   := $(filter-out $(SRCDIR)/SmallList.cpp, $(wildcard $(SRCDIR)/*.cpp)) 
+SRC_FILES   := $(wildcard $(SRCDIR)/*.cpp)
 
 # Object files: main.cpp compiles to objects/main.o,
 # and each .cpp in src compiles to objects/<name>.o

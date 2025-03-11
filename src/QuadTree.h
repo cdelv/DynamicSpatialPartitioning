@@ -1,16 +1,13 @@
-// *********************************************************************************
-// QuadTree.hpp
-// *********************************************************************************
 #pragma once
 #include "SmallList.h"
 
 // Represents a rectangle for the quadtree storing a center and half-size.
 struct QuadCRect
 {
-    int mid_x;
-    int mid_y;
-    int size_x;
-    int size_y;
+    float mid_x;
+    float mid_y;
+    float size_x;
+    float size_y;
 };
 
 // Represents an element in the quadtree.
@@ -28,7 +25,8 @@ struct QuadEltNode
 struct QuadElt
 {
     int id;
-    int ltrb[4];
+    // Changed from int to float
+    float ltrb[4];
 };
 
 // Represents a node in the quadtree.
