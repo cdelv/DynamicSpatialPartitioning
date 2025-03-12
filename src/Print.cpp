@@ -7,6 +7,12 @@ void save_frame_qtree(const std::string& base_name, const std::vector<sphere>& s
     frame++;
 }
 
+void save_frame_grid(const std::string& base_name, const std::vector<sphere>& spheres, const float LENGTH, const float HEIGHT, int &frame) { 
+    save_simulation_box_vtk(base_name, LENGTH, HEIGHT, frame);
+    save_to_csv(base_name, spheres, frame);
+    frame++;
+}
+
 void save_to_csv(const std::string& base_name, const std::vector<sphere>& spheres, const int frame) {    
     std::ostringstream filename;
     filename << base_name << "particles_" << std::setw(5) << std::setfill('0') << frame << ".csv";

@@ -20,7 +20,7 @@ int main(int argc, char const *argv[])
     const int MAX_DEPTH = 32;
     const int steps = 1000;
     const float dt = 0.01f;
-    const float k = 500.0f;
+    const float k = 1000.0f;
     const bool save = false;
     const int SAVE_FREQUENCY = 80;
     const std::string BASE_DIR = "frames/";
@@ -30,7 +30,7 @@ int main(int argc, char const *argv[])
 
     std::cout << "N" << "\t\t" << "performance" << "\n";
 
-    performance = simulate_grid(4, MAX_DEPTH, steps, dt, k, save, SAVE_FREQUENCY, BASE_DIR, MAX_RADIUS, SPACING);
+    performance = simulate_grid(512, MAX_DEPTH, 1000, dt, k, true, 10, BASE_DIR, MAX_RADIUS, SPACING);
     std::cout << 4 << "\t\t" << performance << "\n";
 
     for (int i = 0; i < 10; ++i) {
@@ -52,10 +52,9 @@ int simulate_grid(const int N, const int MAX_DEPTH, const int steps, const float
     const float HEIGHT = std::sqrt(N) * SPACING * 4;
     const float LENGTH = std::sqrt(N) * SPACING * 4;
     const int COLS = static_cast<int>(std::ceil(std::sqrt(N)));
-    const bool print = false;
+    const bool print = true;
     
-    //Quadtree qtree(LENGTH, HEIGHT, MAX_DEPTH);
-    UGrid* grid = ugrid_create(MAX_RADIUS, MAX_RADIUS, 2*MAX_RADIUS, 2*MAX_RADIUS, 0.0f, 0.0f, LENGTH, HEIGHT);
+    LGrid* grid = lgrid_create(8*MAX_RADIUS, 8*MAX_RADIUS, 2*MAX_RADIUS, 2*MAX_RADIUS, 0.0f, 0.0f, LENGTH, HEIGHT);
 
     std::random_device rd;            // seed source
     std::mt19937 gen(rd());           // Mersenne Twister engine
@@ -72,13 +71,13 @@ int simulate_grid(const int N, const int MAX_DEPTH, const int steps, const float
         spheres[i].vy = -dis(gen);
         spheres[i].r = MAX_RADIUS;
         
-        ugrid_insert(grid, i, spheres[i].x, spheres[i].y);
+        lgrid_insert(grid, i, spheres[i].x, spheres[i].y, spheres[i].r, spheres[i].r);
     }
-    ugrid_optimize(grid);
+    lgrid_optimize(grid);
     
     int frame = 0;
-    //if (save)
-    //    save_frame_qtree(BASE_DIR, spheres, qtree, LENGTH, HEIGHT, frame);
+    if (save)
+        save_frame_grid(BASE_DIR, spheres, LENGTH, HEIGHT, frame);
     
     // Simulation loop.
     auto start = std::chrono::steady_clock::now();
@@ -88,7 +87,7 @@ int simulate_grid(const int N, const int MAX_DEPTH, const int steps, const float
         // Compute collision forces.
         //#pragma omp parallel for private(qtree)
         for (int i = 0; i < N; i++) {
-            SmallList<int> neighbors = ugrid_query(grid, spheres[i].x, spheres[i].y, 2*MAX_RADIUS, 2*MAX_RADIUS, i);
+            SmallList<int> neighbors = lgrid_query(grid, spheres[i].x, spheres[i].y, 0.0f, 0.0f, i);
             
             for (int j = 0; j < neighbors.size(); ++j) {
                 const int id = neighbors[j];
@@ -148,13 +147,18 @@ int simulate_grid(const int N, const int MAX_DEPTH, const int steps, const float
             ay[i] = 0.0f;
             
             // Update quadtree with new sphere positions.
-            ugrid_move(grid, i, old_x, old_y, spheres[i].x, spheres[i].y);
-        }
-        ugrid_optimize(grid);
+            //if (ugrid_in_bounds(grid, old_x, old_y)){
+                lgrid_move(grid, i, old_x, old_y, spheres[i].x, spheres[i].y);
+            //}
 
-        //if (save && step % SAVE_FREQUENCY == 0) {
-            //save_frame_qtree(BASE_DIR, spheres, qtree, LENGTH, HEIGHT, frame);
-        //}
+            //ugrid_remove(grid, i, spheres[i].x, spheres[i].y);
+            //ugrid_insert(grid, i, spheres[i].x, spheres[i].y);
+        }
+        lgrid_optimize(grid);
+
+        if (save && step % SAVE_FREQUENCY == 0) {
+            save_frame_grid(BASE_DIR, spheres, LENGTH, HEIGHT, frame);
+        }
     }
     
     auto end = std::chrono::steady_clock::now();
@@ -164,7 +168,7 @@ int simulate_grid(const int N, const int MAX_DEPTH, const int steps, const float
         std::cout << "N: " << N << ", Elapsed time: " << elapsed_time << " seconds" << std::endl;
         std::cout << "FPS: " << steps / elapsed_time << ", Performance: " << (N * steps) / elapsed_time << std::endl;
     }
-    ugrid_destroy(grid);
+    lgrid_destroy(grid);
 
     return (N * steps) / elapsed_time;
 }

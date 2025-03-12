@@ -1,6 +1,6 @@
 # Compiler and flags
 CXX         := g++
-CXXFLAGS    := -Wall -std=c++11 -O3 -I src -fopenmp
+CXXFLAGS    := -Wall -std=c++11 -O3 -march=native -I src -fopenmp
 
 # Directories
 SRCDIR      := src
