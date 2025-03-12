@@ -46,7 +46,6 @@ int main(int argc, char const *argv[])
 
 int simulate_grid(const int N, const int MAX_DEPTH, const int steps, const float dt, const float k, const bool save, const int SAVE_FREQUENCY, const std::string BASE_DIR, const float MAX_RADIUS, const float SPACING) {   
     std::vector<sphere> spheres(N);
-    std::vector<int> tree_id(N);
     std::vector<float> ax(N, 0.0f);
     std::vector<float> ay(N, 0.0f);
     
@@ -56,15 +55,12 @@ int simulate_grid(const int N, const int MAX_DEPTH, const int steps, const float
     const bool print = false;
     
     //Quadtree qtree(LENGTH, HEIGHT, MAX_DEPTH);
-    Ugrid grid = ugrid_create(LENGTH, HEIGHT, float cell_w, float cell_h, float l, float t, float r, float b);
+    UGrid* grid = ugrid_create(MAX_RADIUS, MAX_RADIUS, 2*MAX_RADIUS, 2*MAX_RADIUS, 0.0f, 0.0f, LENGTH, HEIGHT);
 
     std::random_device rd;            // seed source
     std::mt19937 gen(rd());           // Mersenne Twister engine
     std::uniform_real_distribution<float> dis(0.0f, 2.0f);
 
-
-    return 0;
-    
     // Initialize spheres in a grid.
     for (int i = 0; i < N; i++) {
         int row = i / COLS;
@@ -76,18 +72,13 @@ int simulate_grid(const int N, const int MAX_DEPTH, const int steps, const float
         spheres[i].vy = -dis(gen);
         spheres[i].r = MAX_RADIUS;
         
-        float x1 = spheres[i].x - spheres[i].r; 
-        float y1 = spheres[i].y - spheres[i].r;
-        float x2 = spheres[i].x + spheres[i].r; 
-        float y2 = spheres[i].y + spheres[i].r;
-        
-        int element = qtree.insert(i, x1, y1, x2, y2);
-        tree_id[i] = element;
+        ugrid_insert(grid, i, spheres[i].x, spheres[i].y);
     }
+    ugrid_optimize(grid);
     
     int frame = 0;
-    if (save)
-        save_frame_qtree(BASE_DIR, spheres, qtree, LENGTH, HEIGHT, frame);
+    //if (save)
+    //    save_frame_qtree(BASE_DIR, spheres, qtree, LENGTH, HEIGHT, frame);
     
     // Simulation loop.
     auto start = std::chrono::steady_clock::now();
@@ -97,13 +88,7 @@ int simulate_grid(const int N, const int MAX_DEPTH, const int steps, const float
         // Compute collision forces.
         //#pragma omp parallel for private(qtree)
         for (int i = 0; i < N; i++) {
-            SmallList<int> neighbors = qtree.query(
-                spheres[i].x - 2 * MAX_RADIUS, 
-                spheres[i].y - 2 * MAX_RADIUS,
-                spheres[i].x + 2 * MAX_RADIUS, 
-                spheres[i].y + 2 * MAX_RADIUS, 
-                i  // Omit the current sphere.
-            );
+            SmallList<int> neighbors = ugrid_query(grid, spheres[i].x, spheres[i].y, 2*MAX_RADIUS, 2*MAX_RADIUS, i);
             
             for (int j = 0; j < neighbors.size(); ++j) {
                 const int id = neighbors[j];
@@ -150,6 +135,9 @@ int simulate_grid(const int N, const int MAX_DEPTH, const int steps, const float
         
         // Update positions and velocities.
         for (int i = 0; i < N; i++) {
+            float old_x = spheres[i].x;
+            float old_y = spheres[i].y;
+
             spheres[i].vx += dt * ax[i];
             spheres[i].vy += dt * ay[i];
             spheres[i].x  += dt * spheres[i].vx;
@@ -160,19 +148,13 @@ int simulate_grid(const int N, const int MAX_DEPTH, const int steps, const float
             ay[i] = 0.0f;
             
             // Update quadtree with new sphere positions.
-            qtree.remove(tree_id[i]);
-            const float x1 = spheres[i].x - spheres[i].r; 
-            const float y1 = spheres[i].y - spheres[i].r;
-            const float x2 = spheres[i].x + spheres[i].r; 
-            const float y2 = spheres[i].y + spheres[i].r;
-            const int element = qtree.insert(i, x1, y1, x2, y2);
-            tree_id[i] = element;
+            ugrid_move(grid, i, old_x, old_y, spheres[i].x, spheres[i].y);
         }
-        qtree.cleanup();
+        ugrid_optimize(grid);
 
-        if (save && step % SAVE_FREQUENCY == 0) {
-            save_frame_qtree(BASE_DIR, spheres, qtree, LENGTH, HEIGHT, frame);
-        }
+        //if (save && step % SAVE_FREQUENCY == 0) {
+            //save_frame_qtree(BASE_DIR, spheres, qtree, LENGTH, HEIGHT, frame);
+        //}
     }
     
     auto end = std::chrono::steady_clock::now();
@@ -182,6 +164,7 @@ int simulate_grid(const int N, const int MAX_DEPTH, const int steps, const float
         std::cout << "N: " << N << ", Elapsed time: " << elapsed_time << " seconds" << std::endl;
         std::cout << "FPS: " << steps / elapsed_time << ", Performance: " << (N * steps) / elapsed_time << std::endl;
     }
+    ugrid_destroy(grid);
 
     return (N * steps) / elapsed_time;
 }
