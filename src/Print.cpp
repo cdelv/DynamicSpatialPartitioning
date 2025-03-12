@@ -1,6 +1,6 @@
 #include "Print.h"
 
-void save_frame(const std::string& base_name, const std::vector<sphere>& spheres, const Quadtree& tree, const float LENGTH, const float HEIGHT, int &frame) {
+void save_frame_qtree(const std::string& base_name, const std::vector<sphere>& spheres, const Quadtree& tree, const float LENGTH, const float HEIGHT, int &frame) {
     save_simulation_box_vtk(base_name, LENGTH, HEIGHT, frame);
     save_to_csv(base_name, spheres, frame);
     visualize_quadtree(base_name, tree, frame);
@@ -75,8 +75,7 @@ void traverse_quadtree(const Quadtree& tree, int node_index, const QuadCRect& re
 
     const QuadNode& node = tree.nodes[node_index];
     // If the node is internal (count == -1), then it has 4 children.
-    if (node.count == -1)
-    {
+    if (node.count == -1) {
         // Child rectangles: split the parent's half-sizes.
         float hx = rect.size_x / 2.0f;
         float hy = rect.size_y / 2.0f;
