@@ -11,14 +11,14 @@
 #include "UGrid.h"
 
 
-int simulate_qtree(const int N, const int MAX_DEPTH, const int steps, const float dt, const float k, const bool save, const int SAVE_FREQUENCY, const std::string BASE_DIR, const float MAX_RADIUS, const float SPACING);
-int simulate_grid(const int N, const int MAX_DEPTH, const int steps, const float dt, const float k, const bool save, const int SAVE_FREQUENCY, const std::string BASE_DIR, const float MAX_RADIUS, const float SPACING);
+int simulate_qtree(const int N, const int MAX_DEPTH, const int steps, const float dt, const float k, const bool save, const int SAVE_FREQUENCY, const std::string BASE_DIR, const float MAX_RADIUS, const float SPACING, const float polydispersity);
+int simulate_grid(const int N, const int MAX_DEPTH, const int steps, const float dt, const float k, const bool save, const int SAVE_FREQUENCY, const std::string BASE_DIR, const float MAX_RADIUS, const float SPACING, const float polydispersity);
 
 
 int main(int argc, char const *argv[])
 {
     const int MAX_DEPTH = 32;
-    const int steps = 1000;
+    const int steps = 500;
     const float dt = 0.01f;
     const float k = 500.0f;
     const bool save = false;
@@ -27,48 +27,53 @@ int main(int argc, char const *argv[])
     const float MAX_RADIUS  = 1.0f;
     const float SPACING = 3.5f * MAX_RADIUS;
     int performance1, performance2;  
+    float polydispersity = 1.0;  // from 1.0 to infinity (how many times the biggest sphere can be compare with 1.0)
 
-    //performance = simulate_grid(100, MAX_DEPTH, 1000, dt, k, true, 10, BASE_DIR, MAX_RADIUS, SPACING);
-
-    std::cout << "N" << "," << "qtree" << "," << "grid" << "\n";
-    for (int i = 0; i < 20; ++i) {
-        int N = std::pow(2, i);
-
-        performance1 = simulate_qtree(N, MAX_DEPTH, steps, dt, k, save, SAVE_FREQUENCY, BASE_DIR, MAX_RADIUS, SPACING);
-        performance2 = simulate_grid(N, MAX_DEPTH, steps, dt, k, save, SAVE_FREQUENCY, BASE_DIR, MAX_RADIUS, SPACING);
-        std::cout << N << "," << performance1 << "," << performance2 << std::endl;
+    std::cout << "poly" << "," << "N" << "," << "qtree" << "," << "grid" << "\n";
+    for (int j = 0; j < 4; j++) {
+        for (int i = 0; i < 12; ++i) {
+            int N = std::pow(2, i);
+            performance1 = simulate_qtree(N, MAX_DEPTH, steps, dt, k, save, SAVE_FREQUENCY, BASE_DIR, MAX_RADIUS, SPACING, polydispersity);
+            performance2 = simulate_grid(N, MAX_DEPTH, steps, dt, k, save, SAVE_FREQUENCY, BASE_DIR, MAX_RADIUS, SPACING, polydispersity);
+            std::cout << polydispersity << "," << N << "," << performance1 << "," << performance2 << std::endl; 
+        }
+         polydispersity += 0.5;
     }
 
     return 0;
 }
 
 
-int simulate_grid(const int N, const int MAX_DEPTH, const int steps, const float dt, const float k, const bool save, const int SAVE_FREQUENCY, const std::string BASE_DIR, const float MAX_RADIUS, const float SPACING) {   
+int simulate_grid(const int N, const int MAX_DEPTH, const int steps, const float dt, const float k, const bool save, const int SAVE_FREQUENCY, const std::string BASE_DIR, const float MAX_RADIUS, const float SPACING, const float polydispersity) {   
     std::vector<sphere> spheres(N);
     std::vector<float> ax(N, 0.0f);
     std::vector<float> ay(N, 0.0f);
     
-    const float HEIGHT = std::sqrt(N) * SPACING * 4;
-    const float LENGTH = std::sqrt(N) * SPACING * 4;
+    const float HEIGHT = std::sqrt(N) * SPACING * 4 * polydispersity;
+    const float LENGTH = std::sqrt(N) * SPACING * 4 * polydispersity;
     const int COLS = static_cast<int>(std::ceil(std::sqrt(N)));
     const bool print = false;
+
+    const int small = 2;
+    const float big = 4.0*polydispersity;
     
-    LGrid* grid = lgrid_create(8*MAX_RADIUS, 8*MAX_RADIUS, 2*MAX_RADIUS, 2*MAX_RADIUS, 0.0f, 0.0f, LENGTH, HEIGHT);
+    LGrid* grid = lgrid_create(big*MAX_RADIUS, big*MAX_RADIUS, small*MAX_RADIUS, small*MAX_RADIUS, 0.0f, 0.0f, LENGTH, HEIGHT);
 
     std::random_device rd;            // seed source
     std::mt19937 gen(rd());           // Mersenne Twister engine
     std::uniform_real_distribution<float> dis(0.0f, 2.0f);
+    std::uniform_real_distribution<float> rad(MAX_RADIUS, polydispersity*MAX_RADIUS);
 
     // Initialize spheres in a grid.
     for (int i = 0; i < N; i++) {
         int row = i / COLS;
         int col = i % COLS;
 
-        spheres[i].x = col * SPACING + MAX_RADIUS;
-        spheres[i].y = row * SPACING + MAX_RADIUS;
+        spheres[i].x = col * 2*polydispersity*MAX_RADIUS + polydispersity*MAX_RADIUS;
+        spheres[i].y = row * 2*polydispersity*MAX_RADIUS + polydispersity*MAX_RADIUS;
         spheres[i].vx = -dis(gen);
         spheres[i].vy = -dis(gen);
-        spheres[i].r = MAX_RADIUS;
+        spheres[i].r = rad(gen);
         
         lgrid_insert(grid, i, spheres[i].x, spheres[i].y, spheres[i].r, spheres[i].r);
     }
@@ -86,7 +91,7 @@ int simulate_grid(const int N, const int MAX_DEPTH, const int steps, const float
         // Compute collision forces.
         //#pragma omp parallel for private(qtree)
         for (int i = 0; i < N; i++) {
-            SmallList<int> neighbors = lgrid_query(grid, spheres[i].x, spheres[i].y, 0.0f, 0.0f, i);
+            SmallList<int> neighbors = lgrid_query(grid, spheres[i].x, spheres[i].y, spheres[i].r, spheres[i].r, i);
             
             for (int j = 0; j < neighbors.size(); ++j) {
                 const int id = neighbors[j];
@@ -145,15 +150,10 @@ int simulate_grid(const int N, const int MAX_DEPTH, const int steps, const float
             ax[i] = 0.0f; 
             ay[i] = 0.0f;
             
-            // Update quadtree with new sphere positions.
-            //if (ugrid_in_bounds(grid, old_x, old_y)){
-                lgrid_move(grid, i, old_x, old_y, spheres[i].x, spheres[i].y);
-            //}
-
-            //ugrid_remove(grid, i, spheres[i].x, spheres[i].y);
-            //ugrid_insert(grid, i, spheres[i].x, spheres[i].y);
+            lgrid_move(grid, i, old_x, old_y, spheres[i].x, spheres[i].y);
         }
-        lgrid_optimize(grid);
+        if (step % 2 == 0)
+            lgrid_optimize(grid);
 
         if (save && step % SAVE_FREQUENCY == 0) {
             save_frame_grid(BASE_DIR, spheres, grid, LENGTH, HEIGHT, frame);
@@ -173,14 +173,14 @@ int simulate_grid(const int N, const int MAX_DEPTH, const int steps, const float
 }
 
 
-int simulate_qtree(const int N, const int MAX_DEPTH, const int steps, const float dt, const float k, const bool save, const int SAVE_FREQUENCY, const std::string BASE_DIR, const float MAX_RADIUS, const float SPACING) {   
+int simulate_qtree(const int N, const int MAX_DEPTH, const int steps, const float dt, const float k, const bool save, const int SAVE_FREQUENCY, const std::string BASE_DIR, const float MAX_RADIUS, const float SPACING, const float polydispersity) {   
     std::vector<sphere> spheres(N);
     std::vector<int> tree_id(N);
     std::vector<float> ax(N, 0.0f);
     std::vector<float> ay(N, 0.0f);
     
-    const float HEIGHT = std::sqrt(N) * SPACING * 4;
-    const float LENGTH = std::sqrt(N) * SPACING * 4;
+    const float HEIGHT = std::sqrt(N) * SPACING * 4 * polydispersity;
+    const float LENGTH = std::sqrt(N) * SPACING * 4 * polydispersity;
     const int COLS = static_cast<int>(std::ceil(std::sqrt(N)));
     const bool print = false;
     
@@ -189,17 +189,18 @@ int simulate_qtree(const int N, const int MAX_DEPTH, const int steps, const floa
     std::random_device rd;            // seed source
     std::mt19937 gen(rd());           // Mersenne Twister engine
     std::uniform_real_distribution<float> dis(0.0f, 2.0f);
+    std::uniform_real_distribution<float> rad(MAX_RADIUS, polydispersity*MAX_RADIUS);
     
     // Initialize spheres in a grid.
     for (int i = 0; i < N; i++) {
         int row = i / COLS;
         int col = i % COLS;
 
-        spheres[i].x = col * SPACING + MAX_RADIUS;
-        spheres[i].y = row * SPACING + MAX_RADIUS;
+        spheres[i].x = col * 2*polydispersity*MAX_RADIUS + polydispersity*MAX_RADIUS;
+        spheres[i].y = row * 2*polydispersity*MAX_RADIUS + polydispersity*MAX_RADIUS;
         spheres[i].vx = -dis(gen);
         spheres[i].vy = -dis(gen);
-        spheres[i].r = MAX_RADIUS;
+        spheres[i].r = rad(gen);
         
         float x1 = spheres[i].x - spheres[i].r; 
         float y1 = spheres[i].y - spheres[i].r;
@@ -223,10 +224,10 @@ int simulate_qtree(const int N, const int MAX_DEPTH, const int steps, const floa
         //#pragma omp parallel for private(qtree)
         for (int i = 0; i < N; i++) {
             SmallList<int> neighbors = qtree.query(
-                spheres[i].x - 2 * MAX_RADIUS, 
-                spheres[i].y - 2 * MAX_RADIUS,
-                spheres[i].x + 2 * MAX_RADIUS, 
-                spheres[i].y + 2 * MAX_RADIUS, 
+                spheres[i].x - 2 * spheres[i].r, 
+                spheres[i].y - 2 * spheres[i].r,
+                spheres[i].x + 2 * spheres[i].r, 
+                spheres[i].y + 2 * spheres[i].r, 
                 i  // Omit the current sphere.
             );
             
@@ -293,7 +294,8 @@ int simulate_qtree(const int N, const int MAX_DEPTH, const int steps, const floa
             const int element = qtree.insert(i, x1, y1, x2, y2);
             tree_id[i] = element;
         }
-        qtree.cleanup();
+        if (step % 2 == 0)
+            qtree.cleanup();
 
         if (save && step % SAVE_FREQUENCY == 0) {
             save_frame_qtree(BASE_DIR, spheres, qtree, LENGTH, HEIGHT, frame);
