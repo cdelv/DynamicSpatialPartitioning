@@ -30,13 +30,13 @@ int main(int argc, char const *argv[])
 
     //performance = simulate_grid(100, MAX_DEPTH, 1000, dt, k, true, 10, BASE_DIR, MAX_RADIUS, SPACING);
 
-    std::cout << "N" << "\t\t" << "qtree" << "\t\t" << "grid" << "\n";
+    std::cout << "N" << "," << "qtree" << "," << "grid" << "\n";
     for (int i = 0; i < 20; ++i) {
         int N = std::pow(2, i);
 
         performance1 = simulate_qtree(N, MAX_DEPTH, steps, dt, k, save, SAVE_FREQUENCY, BASE_DIR, MAX_RADIUS, SPACING);
         performance2 = simulate_grid(N, MAX_DEPTH, steps, dt, k, save, SAVE_FREQUENCY, BASE_DIR, MAX_RADIUS, SPACING);
-        std::cout << N << "\t\t" << performance1 << "\t\t" << performance2 << "\n";
+        std::cout << N << "," << performance1 << "," << performance2 << std::endl;
     }
 
     return 0;
