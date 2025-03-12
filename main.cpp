@@ -20,24 +20,23 @@ int main(int argc, char const *argv[])
     const int MAX_DEPTH = 32;
     const int steps = 1000;
     const float dt = 0.01f;
-    const float k = 1000.0f;
+    const float k = 500.0f;
     const bool save = false;
     const int SAVE_FREQUENCY = 80;
     const std::string BASE_DIR = "frames/";
     const float MAX_RADIUS  = 1.0f;
     const float SPACING = 3.5f * MAX_RADIUS;
-    int performance;  
+    int performance1, performance2;  
 
-    std::cout << "N" << "\t\t" << "performance" << "\n";
+    //performance = simulate_grid(100, MAX_DEPTH, 1000, dt, k, true, 10, BASE_DIR, MAX_RADIUS, SPACING);
 
-    performance = simulate_grid(512, MAX_DEPTH, 1000, dt, k, true, 10, BASE_DIR, MAX_RADIUS, SPACING);
-    std::cout << 4 << "\t\t" << performance << "\n";
-
-    for (int i = 0; i < 10; ++i) {
+    std::cout << "N" << "\t\t" << "qtree" << "\t\t" << "grid" << "\n";
+    for (int i = 0; i < 20; ++i) {
         int N = std::pow(2, i);
 
-        performance = simulate_qtree(N, MAX_DEPTH, steps, dt, k, save, SAVE_FREQUENCY, BASE_DIR, MAX_RADIUS, SPACING);
-        std::cout << N << "\t\t" << performance << "\n";
+        performance1 = simulate_qtree(N, MAX_DEPTH, steps, dt, k, save, SAVE_FREQUENCY, BASE_DIR, MAX_RADIUS, SPACING);
+        performance2 = simulate_grid(N, MAX_DEPTH, steps, dt, k, save, SAVE_FREQUENCY, BASE_DIR, MAX_RADIUS, SPACING);
+        std::cout << N << "\t\t" << performance1 << "\t\t" << performance2 << "\n";
     }
 
     return 0;
@@ -52,7 +51,7 @@ int simulate_grid(const int N, const int MAX_DEPTH, const int steps, const float
     const float HEIGHT = std::sqrt(N) * SPACING * 4;
     const float LENGTH = std::sqrt(N) * SPACING * 4;
     const int COLS = static_cast<int>(std::ceil(std::sqrt(N)));
-    const bool print = true;
+    const bool print = false;
     
     LGrid* grid = lgrid_create(8*MAX_RADIUS, 8*MAX_RADIUS, 2*MAX_RADIUS, 2*MAX_RADIUS, 0.0f, 0.0f, LENGTH, HEIGHT);
 
@@ -77,7 +76,7 @@ int simulate_grid(const int N, const int MAX_DEPTH, const int steps, const float
     
     int frame = 0;
     if (save)
-        save_frame_grid(BASE_DIR, spheres, LENGTH, HEIGHT, frame);
+        save_frame_grid(BASE_DIR, spheres, grid, LENGTH, HEIGHT, frame);
     
     // Simulation loop.
     auto start = std::chrono::steady_clock::now();
@@ -157,7 +156,7 @@ int simulate_grid(const int N, const int MAX_DEPTH, const int steps, const float
         lgrid_optimize(grid);
 
         if (save && step % SAVE_FREQUENCY == 0) {
-            save_frame_grid(BASE_DIR, spheres, LENGTH, HEIGHT, frame);
+            save_frame_grid(BASE_DIR, spheres, grid, LENGTH, HEIGHT, frame);
         }
     }
     

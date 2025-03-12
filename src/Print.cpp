@@ -7,9 +7,10 @@ void save_frame_qtree(const std::string& base_name, const std::vector<sphere>& s
     frame++;
 }
 
-void save_frame_grid(const std::string& base_name, const std::vector<sphere>& spheres, const float LENGTH, const float HEIGHT, int &frame) { 
+void save_frame_grid(const std::string& base_name, const std::vector<sphere>& spheres, const LGrid* grid, const float LENGTH, const float HEIGHT, int &frame) { 
     save_simulation_box_vtk(base_name, LENGTH, HEIGHT, frame);
     save_to_csv(base_name, spheres, frame);
+    visualize_grid(base_name, grid, frame);
     frame++;
 }
 
@@ -154,5 +155,125 @@ void visualize_quadtree(const std::string& base_name, const Quadtree& tree, cons
         }
         file << "\n";
     }
+    file.close();
+}
+
+void add_grid_rectangle(const float rect[4], std::vector<std::array<float, 3>>& points, 
+                        std::vector<std::vector<int>>& lines, bool is_loose) {
+    // rect is [left, top, right, bottom]
+    float xmin = rect[0];
+    float ymin = rect[1];
+    float xmax = rect[2];
+    float ymax = rect[3];
+
+    int start = points.size();
+    points.push_back({xmin, ymin, 0.0f});
+    points.push_back({xmax, ymin, 0.0f});
+    points.push_back({xmax, ymax, 0.0f});
+    points.push_back({xmin, ymax, 0.0f});
+    // Repeat the first point to close the rectangle
+    points.push_back({xmin, ymin, 0.0f});
+
+    // Store the indices as a polyline cell
+    lines.push_back({start, start + 1, start + 2, start + 3, start + 4});
+}
+
+void visualize_grid(const std::string& base_name, const LGrid* grid, const int frame) {
+    std::ostringstream filename;
+    filename << base_name << "grid_" << std::setw(5) << std::setfill('0') << frame << ".vtk";
+    std::ofstream file(filename.str());
+
+    // Vectors to store points and polyline cells
+    std::vector<std::array<float, 3>> points;
+    std::vector<std::vector<int>> lines;
+
+    // First, add the tight grid cells (as a background reference)
+    const float tight_cell_width = 1.0f / grid->tight.inv_cell_w;
+    const float tight_cell_height = 1.0f / grid->tight.inv_cell_h;
+    
+    for (int row = 0; row < grid->tight.num_rows; ++row) {
+        for (int col = 0; col < grid->tight.num_cols; ++col) {
+            float rect[4] = {
+                grid->x + col * tight_cell_width,
+                grid->y + row * tight_cell_height,
+                grid->x + (col + 1) * tight_cell_width,
+                grid->y + (row + 1) * tight_cell_height
+            };
+            
+            // Only add tight cells that have content
+            int cell_idx = row * grid->tight.num_cols + col;
+            if (grid->tight.heads[cell_idx] != -1) {
+                add_grid_rectangle(rect, points, lines);
+            }
+        }
+    }
+
+    // Then, add the loose cells that actually contain elements
+    for (int c = 0; c < grid->loose.num_cells; ++c) {
+        const LGridLooseCell* lcell = &grid->loose.cells[c];
+        
+        // Skip empty loose cells (those with no elements)
+        if (lcell->head == -1) {
+            continue;
+        }
+        
+        // Transform the loose cell's coordinates from grid-relative to world coordinates
+        float world_rect[4] = {
+            grid->x + lcell->rect[0],  // left
+            grid->y + lcell->rect[1],  // top
+            grid->x + lcell->rect[2],  // right
+            grid->y + lcell->rect[3]   // bottom
+        };
+        
+        // Add the loose cell's actual bounds
+        add_grid_rectangle(world_rect, points, lines, true);
+        
+        // Optionally, add the elements inside each loose cell
+        int elt_idx = lcell->head;
+        while (elt_idx != -1) {
+            const LGridElt* elt = &grid->elts[elt_idx];
+            
+            // Create a rectangle for the element
+            float elt_rect[4] = {
+                grid->x + elt->mx - elt->hx,  // left
+                grid->y + elt->my - elt->hy,  // top
+                grid->x + elt->mx + elt->hx,  // right
+                grid->y + elt->my + elt->hy   // bottom
+            };
+            
+            // Add the element
+            add_grid_rectangle(elt_rect, points, lines);
+            
+            elt_idx = elt->next;
+        }
+    }
+
+    // Write VTK legacy header
+    file << "# vtk DataFile Version 3.0\n";
+    file << "Adaptive Grid Visualization\n";
+    file << "ASCII\n";
+    file << "DATASET POLYDATA\n";
+
+    // Write the points
+    file << "POINTS " << points.size() << " float\n";
+    for (const auto& pt : points) {
+        file << pt[0] << " " << pt[1] << " " << pt[2] << "\n";
+    }
+
+    // Compute total number of integers to be written for the lines
+    int total_line_size = 0;
+    for (const auto& line : lines) {
+        total_line_size += (1 + line.size());
+    }
+
+    file << "LINES " << lines.size() << " " << total_line_size << "\n";
+    for (const auto& line : lines) {
+        file << line.size();
+        for (int idx : line) {
+            file << " " << idx;
+        }
+        file << "\n";
+    }
+    
     file.close();
 }
