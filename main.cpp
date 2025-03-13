@@ -11,40 +11,44 @@
 #include "UGrid.h"
 
 
-int simulate_qtree(const int N, const int MAX_DEPTH, const int steps, const float dt, const float k, const bool save, const int SAVE_FREQUENCY, const std::string BASE_DIR, const float MAX_RADIUS, const float SPACING, const float polydispersity);
-int simulate_grid(const int N, const int MAX_DEPTH, const int steps, const float dt, const float k, const bool save, const int SAVE_FREQUENCY, const std::string BASE_DIR, const float MAX_RADIUS, const float SPACING, const float polydispersity);
+long int simulate_qtree(const int N, const int MAX_DEPTH, const int steps, const float dt, const float k, const bool save, const bool print, const int SAVE_FREQUENCY, const std::string BASE_DIR, const float MAX_RADIUS, const float SPACING, const float polydispersity);
+long int simulate_grid(const int N, const int MAX_DEPTH, const int steps, const float dt, const float k, const bool save, const bool print, const int SAVE_FREQUENCY, const std::string BASE_DIR, const float MAX_RADIUS, const float SPACING, const float polydispersity);
 
 
 int main(int argc, char const *argv[])
 {
     const int MAX_DEPTH = 32;
-    const int steps = 500;
-    const float dt = 0.01f;
+    const int steps = 100;
+    const float dt = 0.03f;
     const float k = 500.0f;
     const bool save = false;
+    const bool print = false;
     const int SAVE_FREQUENCY = 80;
     const std::string BASE_DIR = "frames/";
     const float MAX_RADIUS  = 1.0f;
-    const float SPACING = 3.5f * MAX_RADIUS;
-    int performance1, performance2;  
+    const float SPACING = 1.5f * MAX_RADIUS;
+    long int performance1, performance2;  
     float polydispersity = 1.0;  // from 1.0 to infinity (how many times the biggest sphere can be compare with 1.0)
 
-    std::cout << "poly" << "," << "N" << "," << "qtree" << "," << "grid" << "\n";
+    //simulate_qtree(10000, MAX_DEPTH, steps, dt, k, save, true, SAVE_FREQUENCY, BASE_DIR, MAX_RADIUS, SPACING, 2.5);
+    //simulate_grid(10000, MAX_DEPTH, steps, dt, k, save, true, SAVE_FREQUENCY, BASE_DIR, MAX_RADIUS, SPACING, 2.5);
+    //return 0;
+    
+    std::cout << "poly,N,qtree,grid" << std::endl;
     for (int j = 0; j < 4; j++) {
-        for (int i = 0; i < 12; ++i) {
+        for (int i = 0; i < 20; ++i) {
             int N = std::pow(2, i);
-            performance1 = simulate_qtree(N, MAX_DEPTH, steps, dt, k, save, SAVE_FREQUENCY, BASE_DIR, MAX_RADIUS, SPACING, polydispersity);
-            performance2 = simulate_grid(N, MAX_DEPTH, steps, dt, k, save, SAVE_FREQUENCY, BASE_DIR, MAX_RADIUS, SPACING, polydispersity);
+            performance1 = simulate_qtree(N, MAX_DEPTH, steps, dt, k, save, print, SAVE_FREQUENCY, BASE_DIR, MAX_RADIUS, SPACING, polydispersity);
+            performance2 = simulate_grid(N, MAX_DEPTH, steps, dt, k, save, print, SAVE_FREQUENCY, BASE_DIR, MAX_RADIUS, SPACING, polydispersity);
             std::cout << polydispersity << "," << N << "," << performance1 << "," << performance2 << std::endl; 
         }
-         polydispersity += 0.5;
+         polydispersity += 0.75;
     }
 
     return 0;
 }
 
-
-int simulate_grid(const int N, const int MAX_DEPTH, const int steps, const float dt, const float k, const bool save, const int SAVE_FREQUENCY, const std::string BASE_DIR, const float MAX_RADIUS, const float SPACING, const float polydispersity) {   
+long int simulate_grid(const int N, const int MAX_DEPTH, const int steps, const float dt, const float k, const bool save, const bool print, const int SAVE_FREQUENCY, const std::string BASE_DIR, const float MAX_RADIUS, const float SPACING, const float polydispersity) {   
     std::vector<sphere> spheres(N);
     std::vector<float> ax(N, 0.0f);
     std::vector<float> ay(N, 0.0f);
@@ -52,7 +56,6 @@ int simulate_grid(const int N, const int MAX_DEPTH, const int steps, const float
     const float HEIGHT = std::sqrt(N) * SPACING * 4 * polydispersity;
     const float LENGTH = std::sqrt(N) * SPACING * 4 * polydispersity;
     const int COLS = static_cast<int>(std::ceil(std::sqrt(N)));
-    const bool print = false;
 
     const int small = 2;
     const float big = 4.0*polydispersity;
@@ -82,10 +85,14 @@ int simulate_grid(const int N, const int MAX_DEPTH, const int steps, const float
     int frame = 0;
     if (save)
         save_frame_grid(BASE_DIR, spheres, grid, LENGTH, HEIGHT, frame);
+
+    if (print) {
+        std::cout << "step,performance" << std::endl;
+    }
     
     // Simulation loop.
     auto start = std::chrono::steady_clock::now();
-
+    auto start2 = std::chrono::steady_clock::now();
     for (int step = 0; step < steps; ++step) {
         
         // Compute collision forces.
@@ -158,22 +165,24 @@ int simulate_grid(const int N, const int MAX_DEPTH, const int steps, const float
         if (save && step % SAVE_FREQUENCY == 0) {
             save_frame_grid(BASE_DIR, spheres, grid, LENGTH, HEIGHT, frame);
         }
+        if (step%SAVE_FREQUENCY == 0 && print){
+            auto end2 = std::chrono::steady_clock::now();
+            float elapsed_time2 = std::chrono::duration<float>(end2 - start2).count();
+            std::cout << step << "," << (N * SAVE_FREQUENCY) / elapsed_time2 << std::endl;
+            start2 = std::chrono::steady_clock::now();
+        }
     }
     
     auto end = std::chrono::steady_clock::now();
     float elapsed_time = std::chrono::duration<float>(end - start).count();
 
-    if (print) {
-        std::cout << "N: " << N << ", Elapsed time: " << elapsed_time << " seconds" << std::endl;
-        std::cout << "FPS: " << steps / elapsed_time << ", Performance: " << (N * steps) / elapsed_time << std::endl;
-    }
     lgrid_destroy(grid);
 
     return (N * steps) / elapsed_time;
 }
 
 
-int simulate_qtree(const int N, const int MAX_DEPTH, const int steps, const float dt, const float k, const bool save, const int SAVE_FREQUENCY, const std::string BASE_DIR, const float MAX_RADIUS, const float SPACING, const float polydispersity) {   
+long int simulate_qtree(const int N, const int MAX_DEPTH, const int steps, const float dt, const float k, const bool save, const bool print, const int SAVE_FREQUENCY, const std::string BASE_DIR, const float MAX_RADIUS, const float SPACING, const float polydispersity) {   
     std::vector<sphere> spheres(N);
     std::vector<int> tree_id(N);
     std::vector<float> ax(N, 0.0f);
@@ -182,7 +191,6 @@ int simulate_qtree(const int N, const int MAX_DEPTH, const int steps, const floa
     const float HEIGHT = std::sqrt(N) * SPACING * 4 * polydispersity;
     const float LENGTH = std::sqrt(N) * SPACING * 4 * polydispersity;
     const int COLS = static_cast<int>(std::ceil(std::sqrt(N)));
-    const bool print = false;
     
     Quadtree qtree(LENGTH, HEIGHT, MAX_DEPTH);
 
@@ -214,10 +222,14 @@ int simulate_qtree(const int N, const int MAX_DEPTH, const int steps, const floa
     int frame = 0;
     if (save)
         save_frame_qtree(BASE_DIR, spheres, qtree, LENGTH, HEIGHT, frame);
+
+    if (print) {
+        std::cout << "step,performance" << std::endl;
+    }
     
     // Simulation loop.
     auto start = std::chrono::steady_clock::now();
-
+    auto start2 = std::chrono::steady_clock::now();
     for (int step = 0; step < steps; ++step) {
         
         // Compute collision forces.
@@ -300,15 +312,15 @@ int simulate_qtree(const int N, const int MAX_DEPTH, const int steps, const floa
         if (save && step % SAVE_FREQUENCY == 0) {
             save_frame_qtree(BASE_DIR, spheres, qtree, LENGTH, HEIGHT, frame);
         }
+        if (step%SAVE_FREQUENCY == 0 && print){
+            auto end2 = std::chrono::steady_clock::now();
+            float elapsed_time2 = std::chrono::duration<float>(end2 - start2).count();
+            std::cout << step << "," << (N * SAVE_FREQUENCY) / elapsed_time2 << std::endl;
+            start2 = std::chrono::steady_clock::now();
+        }
     }
     
     auto end = std::chrono::steady_clock::now();
     float elapsed_time = std::chrono::duration<float>(end - start).count();
-
-    if (print) {
-        std::cout << "N: " << N << ", Elapsed time: " << elapsed_time << " seconds" << std::endl;
-        std::cout << "FPS: " << steps / elapsed_time << ", Performance: " << (N * steps) / elapsed_time << std::endl;
-    }
-
     return (N * steps) / elapsed_time;
 }
