@@ -18,12 +18,12 @@ long int simulate_grid(const int N, const int MAX_DEPTH, const int steps, const 
 int main(int argc, char const *argv[])
 {
     const int MAX_DEPTH = 32;
-    const int steps = 100;
+    const int steps = 1000;
     const float dt = 0.03f;
     const float k = 500.0f;
     const bool save = false;
     const bool print = false;
-    const int SAVE_FREQUENCY = 80;
+    const int SAVE_FREQUENCY = 50;
     const std::string BASE_DIR = "frames/";
     const float MAX_RADIUS  = 1.0f;
     const float SPACING = 1.5f * MAX_RADIUS;
@@ -36,7 +36,7 @@ int main(int argc, char const *argv[])
     
     std::cout << "poly,N,qtree,grid" << std::endl;
     for (int j = 0; j < 4; j++) {
-        for (int i = 0; i < 20; ++i) {
+        for (int i = 0; i < 19; ++i) {
             int N = std::pow(2, i);
             performance1 = simulate_qtree(N, MAX_DEPTH, steps, dt, k, save, print, SAVE_FREQUENCY, BASE_DIR, MAX_RADIUS, SPACING, polydispersity);
             performance2 = simulate_grid(N, MAX_DEPTH, steps, dt, k, save, print, SAVE_FREQUENCY, BASE_DIR, MAX_RADIUS, SPACING, polydispersity);
@@ -52,6 +52,8 @@ long int simulate_grid(const int N, const int MAX_DEPTH, const int steps, const 
     std::vector<sphere> spheres(N);
     std::vector<float> ax(N, 0.0f);
     std::vector<float> ay(N, 0.0f);
+    std::vector<float> old_x(N, 0.0f);
+    std::vector<float> old_y(N, 0.0f);
     
     const float HEIGHT = std::sqrt(N) * SPACING * 4 * polydispersity;
     const float LENGTH = std::sqrt(N) * SPACING * 4 * polydispersity;
@@ -96,8 +98,11 @@ long int simulate_grid(const int N, const int MAX_DEPTH, const int steps, const 
     for (int step = 0; step < steps; ++step) {
         
         // Compute collision forces.
-        //#pragma omp parallel for private(qtree)
+        #pragma omp parallel for shared(spheres, ax, ay, k)
         for (int i = 0; i < N; i++) {
+            ax[i] = 0.0f; 
+            ay[i] = 0.0f;
+
             SmallList<int> neighbors = lgrid_query(grid, spheres[i].x, spheres[i].y, spheres[i].r, spheres[i].r, i);
             
             for (int j = 0; j < neighbors.size(); ++j) {
@@ -144,21 +149,21 @@ long int simulate_grid(const int N, const int MAX_DEPTH, const int steps, const 
         }
         
         // Update positions and velocities.
+        #pragma omp parallel for shared(spheres, old_x, old_y, ax, ay, dt)
         for (int i = 0; i < N; i++) {
-            float old_x = spheres[i].x;
-            float old_y = spheres[i].y;
+            old_x[i] = spheres[i].x;
+            old_y[i] = spheres[i].y;
 
             spheres[i].vx += dt * ax[i];
             spheres[i].vy += dt * ay[i];
             spheres[i].x  += dt * spheres[i].vx;
             spheres[i].y  += dt * spheres[i].vy;
-            
-            // Reset forces.
-            ax[i] = 0.0f; 
-            ay[i] = 0.0f;
-            
-            lgrid_move(grid, i, old_x, old_y, spheres[i].x, spheres[i].y);
         }
+
+        for (int i = 0; i < N; ++i) {
+            lgrid_move(grid, i, old_x[i], old_y[i], spheres[i].x, spheres[i].y);
+        }
+
         if (step % 2 == 0)
             lgrid_optimize(grid);
 
